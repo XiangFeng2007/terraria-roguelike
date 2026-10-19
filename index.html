@@ -1724,9 +1724,9 @@ window.TR_DATA = {"items": [{"id": "melee_wooden_sword", "name": "木剑", "name
        第9-10章        四柱/月亮领主级
      min 是硬下限：过滤掉"第 6 章还给你发木弓"这种不匹配的东西。 */
   var CHAPTER_GEAR = {
-    center: [3, 4, 4, 5, 5, 6, 7, 8, 9, 9],
-    max:    [3, 4, 4, 5, 5, 6, 7, 8, 9, 9],
-    min:    [1, 2, 3, 3, 4, 5, 6, 7, 8, 8]
+    center: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+    max:    [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+    min:    [0, 0, 0, 1, 2, 3, 4, 5, 6, 7]
   };
   TR.CHAPTER_GEAR = CHAPTER_GEAR;
 
@@ -2037,9 +2037,10 @@ window.TR_DATA = {"items": [{"id": "melee_wooden_sword", "name": "木剑", "name
   /* 平衡系数：肉鸽局里玩家装备远少于原版同阶段，需要压缩 Boss 血量、放大玩家输出 */
   var TUNE = TR.TUNE = {
     /* 全局节奏：1.0 = 原始速度。
-       0.45 时遭遇战 5-17 秒（太快），0.28 约等于 3.5 倍慢放：
-       目标 遭遇战 25-40 秒、Boss 60-150 秒。 */
-    timeScale: 0.28,
+       0.28 太慢（约 3.5 倍慢放），按用户要求整体提速到 0.84（= 原来的 3 倍）。
+       Boss 血量公式里也乘了 timeScale，所以 Boss 战的真实时长基本不变，
+       变快的是"动作看起来的速度"和杂兵战的节奏。 */
+    timeScale: 0.84,
     playerDmgMul: 3.8,       /* 玩家伤害倍率 */
     /* 生命上限用原版加法曲线（100 + 20/章 + 20/水晶 + 装备加成） */
     /* 节奏：把"双方血量池"一起放大、伤害数值不动 → 打架更久但看得清。
@@ -2059,7 +2060,7 @@ window.TR_DATA = {"items": [{"id": "melee_wooden_sword", "name": "木剑", "name
     /* 敌人伤害：只保留一层系数，数值直接对齐原版手感。
        之前是 enemyDmgMul(0.15) × paceEnemyDmgMul(0.16) = 2.4%，等于敌人打你几乎不掉血。
        现在合并成一个，普通难度就是原版伤害的 55%。 */
-    enemyDmgMul: { normal: 0.62, expert: 0.78, master: 0.95 },
+    enemyDmgMul: { normal: 0.68, expert: 0.85, master: 1.03 },
     /* 单次受击上限：原版没有这个限制，只在"防止被一发秒杀"时生效。
        设成 35% 意味着：残血时被 Boss 大招打中会直接掉三分之一血，很危险但不至于瞬死。 */
     hitCapPct: 0.18,
@@ -2078,7 +2079,10 @@ window.TR_DATA = {"items": [{"id": "melee_wooden_sword", "name": "木剑", "name
     /* Boss 血量只由「橡皮筋」决定：目标 = 本章预期 DPS × 目标秒数 × bossHpMul。
        注意：整个 TUNE 里 bossHpMul 只能有一处定义（之前重复定义了 4 次，
        后面的 1.0 把前面全部覆盖，导致血量完全失控）。 */
-    bossHpMul: 1.3,
+    /* 注意：target = expectedDps × timeScale × 目标秒数，
+       所以 timeScale 变快时血量会跟着涨、战斗在"游戏时间内"变长 → 玩家多挨伤害。
+       提速到 0.84 后，这里按 0.28/0.84 抵消，保持和提速前一样的手感与难度。 */
+    bossHpMul: 0.47,
     expectedDps: [180, 260, 340, 420, 520, 700, 820, 940, 1050, 1200],
     /* 每章 Boss 目标战斗时长（游戏内秒）。玩家生命是原版加法曲线且没有翅膀/钩爪，
        所以后期 Boss 不能拖太久，否则必被耗死。 */
@@ -2113,7 +2117,7 @@ window.TR_DATA = {"items": [{"id": "melee_wooden_sword", "name": "木剑", "name
     knockbackStunBase: 0.10,   /* 基础眩晕秒数 */
     knockbackStunScale: 0.30,  /* knockPct=1 时额外眩晕 */
     bossKnockResist: 0.18,     /* Boss/Boss部件击退抗性（击退初速与眩晕都乘这个） */
-    trashHpMul: 1.8,         /* 小怪血量整体倍率 */
+    trashHpMul: 1.98,         /* 小怪血量整体倍率 */
     trashDmgMul: 1.0,       /* 小怪伤害额外系数：小怪战也要能掉血 */
     /* 遭遇战目标 25-40 秒：小怪血量再乘一个节奏系数（独立于 trashHpMul，
        这样调"遭遇战长短"不用动"小怪相对强弱"） */
@@ -4058,17 +4062,26 @@ window.TR_DATA = {"items": [{"id": "melee_wooden_sword", "name": "木剑", "name
     });
     ctx.textAlign = 'left';
 
-    /* 敌方血条（大怪在头顶显示） */
+    /* 小怪血条：直接贴在每只怪头顶（Boss 走屏幕顶部大血条，部件不单独挂条） */
     battle.enemies.forEach(function (u) {
-      if (!u.isBoss && u.maxHp < 400) return;
+      if (u.dead || u.isBoss || u.isPart) return;
       var r = u.rect();
-      var bw = Math.max(30, r.w), bx = u.x - bw / 2, by = r.y - 8;
-      ctx.fillStyle = 'rgba(0,0,0,.6)'; ctx.fillRect(bx, by, bw, 4);
-      ctx.fillStyle = u.isBoss ? '#e04a4a' : '#d0d060';
-      ctx.fillRect(bx, by, bw * Math.max(0, u.hp / u.maxHp), 4);
+      var sp = TR.Sprites.ready(u.spriteName);
+      var F = unitFrame(sp, r.w, r.h);
+      var bw = Math.max(18, Math.min(44, Math.round(F.dw * 0.9)));
+      var bx = Math.round(u.x - bw / 2);
+      var by = Math.round(u.y - F.dh - 7);
+      var frac = Math.max(0, Math.min(1, u.hp / Math.max(1, u.maxHp)));
+      /* 底衬（黑框），保证在任何背景上都看得清 */
+      ctx.fillStyle = 'rgba(0,0,0,.62)';
+      ctx.fillRect(bx - 1, by - 1, bw + 2, 5);
+      ctx.fillStyle = '#2c1a22';
+      ctx.fillRect(bx, by, bw, 3);
+      ctx.fillStyle = u.hp / u.maxHp > 0.5 ? '#5ed07a' : (u.hp / u.maxHp > 0.22 ? '#e0c24a' : '#e0554a');
+      ctx.fillRect(bx, by, Math.round(bw * frac), 3);
       if (u.shield > 0) {
         ctx.fillStyle = '#9ad8ff';
-        ctx.fillRect(bx, by - 2, bw * Math.min(1, u.shield / u.maxHp), 2);
+        ctx.fillRect(bx, by - 3, Math.round(bw * Math.min(1, u.shield / Math.max(1, u.maxHp))), 2);
       }
     });
 
@@ -4076,6 +4089,61 @@ window.TR_DATA = {"items": [{"id": "melee_wooden_sword", "name": "木剑", "name
     ctx.restore();                 /* 结束世界坐标（相机）平移 */
     /* 屏幕外敌人指示箭头：长战线必须让玩家知道敌人在哪一侧 */
     drawOffscreenMarkers(ctx, battle, camX);
+
+    /* ===== Boss 大血条：固定在屏幕顶部 ===== */
+    var bigBoss = null;
+    for (var bi = 0; bi < battle.enemies.length; bi++) {
+      var bb = battle.enemies[bi];
+      if (bb.isBoss && !bb.dead) { bigBoss = bb; break; }
+    }
+    if (bigBoss) {
+      var barW = Math.min(W - 56, 330);
+      var bx0 = Math.round((W - barW) / 2);
+      var by0 = 12;
+      var bfrac = Math.max(0, Math.min(1, bigBoss.hp / Math.max(1, bigBoss.maxHp)));
+      ctx.save();
+      /* 外框 + 底槽 */
+      ctx.fillStyle = 'rgba(0,0,0,.66)';
+      roundRect(ctx, bx0 - 4, by0 - 4, barW + 8, 22, 5); ctx.fill();
+      ctx.fillStyle = '#241318';
+      ctx.fillRect(bx0, by0, barW, 14);
+      /* 血量 */
+      var bg = ctx.createLinearGradient(0, by0, 0, by0 + 14);
+      bg.addColorStop(0, '#ff6f5a');
+      bg.addColorStop(1, '#a30f26');
+      ctx.fillStyle = bg;
+      ctx.fillRect(bx0, by0, Math.round(barW * bfrac), 14);
+      /* 受伤残影（白色细条，视觉上更"打击感"） */
+      ctx.fillStyle = 'rgba(255,220,200,.35)';
+      ctx.fillRect(bx0, by0, Math.round(barW * bfrac), 3);
+      /* 边框 */
+      ctx.strokeStyle = 'rgba(255,170,140,.55)';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(bx0 + 0.5, by0 + 0.5, barW - 1, 13);
+      /* 名字 + 数值 */
+      ctx.font = 'bold 9px ui-monospace, monospace';
+      ctx.textAlign = 'center';
+      ctx.fillStyle = 'rgba(0,0,0,.75)';
+      ctx.fillText(bigBoss.name, W / 2 + 0.6, by0 + 10.4);
+      ctx.fillStyle = '#fff';
+      ctx.fillText(bigBoss.name, W / 2, by0 + 9.8);
+      ctx.font = '8px ui-monospace, monospace';
+      ctx.fillStyle = 'rgba(255,255,255,.9)';
+      ctx.fillText(Math.max(0, Math.round(bigBoss.hp)) + ' / ' + Math.round(bigBoss.maxHp),
+        W / 2, by0 + 20.5);
+      /* 阶段点：多阶段 Boss 在血条下方标出 */
+      var phases = (bigBoss.def0 && bigBoss.def0.phases) ? bigBoss.def0.phases.length : 0;
+      if (phases > 0) {
+        for (var pi = 0; pi < phases + 1; pi++) {
+          ctx.fillStyle = pi <= (bigBoss.phaseIdx || 0) ? '#ffcf6a' : 'rgba(255,255,255,.25)';
+          ctx.beginPath();
+          ctx.arc(W / 2 - (phases * 6) / 2 + pi * 6, by0 + 26, 1.6, 0, 6.284);
+          ctx.fill();
+        }
+      }
+      ctx.textAlign = 'left';
+      ctx.restore();
+    }
     if (battle.banner) {
       var bn = battle.banner;
       var fade = Math.min(1, bn.t / 0.35) * Math.min(1, (bn.max - bn.t) / 0.18 + 0.2);
@@ -4102,6 +4170,18 @@ window.TR_DATA = {"items": [{"id": "melee_wooden_sword", "name": "木剑", "name
     ctx.restore();
   };
 
+  /* 计算一个单位"实际画出来的那一帧"的尺寸。
+     NPC 贴图是竖排多帧，rect() 用的是整张表，直接用会把血条顶到天上。 */
+  function unitFrame(img, rectW, rectH) {
+    if (!img) return { fw: rectW, fr: 1, fh: rectH, dw: rectW, dh: rectH };
+    var fw = img.width;
+    var fr = Math.max(1, Math.round(img.height / Math.max(1, fw)));
+    var fh = img.height / fr;
+    var dw = rectW;
+    var dh = Math.min(rectH, rectW * (fh / Math.max(1, fw)));
+    return { fw: fw, fr: fr, fh: fh, dw: dw, dh: dh };
+  }
+
   function drawUnit(ctx, u, battle) {
     var r = u.rect();
     var img = u.tint ? TR.Sprites.tinted(u.spriteName, u.tint) : TR.Sprites.ready(u.spriteName);
@@ -4111,19 +4191,13 @@ window.TR_DATA = {"items": [{"id": "melee_wooden_sword", "name": "木剑", "name
       /* NPC 贴图是**竖排多帧的精灵表**（如 NPC_1.png = 32x52 的两帧史莱姆）。
          之前直接把整张图画进一个怪物的矩形里，竖排的帧就被压成"上下叠着的
          好几只史莱姆"。这里按 帧数≈round(高/宽) 切出单帧，并按时间播放动画。 */
-      var fw = img.width;
-      var fr = Math.max(1, Math.round(img.height / Math.max(1, fw)));
-      var fh = img.height / fr;
-      var idx = fr > 1 ? (Math.floor(battle.time * 6) % fr) : 0;
-      /* 按帧的原始宽高比绘制，别硬塞进方形碰撞框
-         （否则史莱姆这种"宽>高"的帧会被拉成瘦高的椭圆）。 */
-      var dw = r.w;
-      var dh = Math.min(r.h, r.w * (fh / Math.max(1, fw)));
+      var F = unitFrame(img, r.w, r.h);
+      var idx = F.fr > 1 ? (Math.floor(battle.time * 6) % F.fr) : 0;
       ctx.save();
       ctx.translate(u.x, u.y);
       if (u.facing > 0) ctx.scale(-1, 1);
       if (u.hitFlash > 0) { ctx.globalAlpha = 0.85; }
-      ctx.drawImage(img, 0, idx * fh, fw, fh, -dw / 2, -dh, dw, dh);
+      ctx.drawImage(img, 0, idx * F.fh, F.fw, F.fh, -F.dw / 2, -F.dh, F.dw, F.dh);
       ctx.restore();
     } else {
       ctx.fillStyle = u.hitFlash > 0 ? '#ffffff' : u.color;
@@ -4970,17 +5044,12 @@ window.TR_DATA = {"items": [{"id": "melee_wooden_sword", "name": "木剑", "name
     var wrap = $('enemy-bars');
     clear(wrap);
     state.enemyBarCache = {};
-    battle.enemies.forEach(function (u, i) {
-      if (i > 4) return;
-      var bar = el('div', 'bar ebar' + (u.isBoss ? ' boss' : ''));
-      var fill = el('i');
-      var span = el('span', null, u.name + ' ' + Math.round(u.hp) + '/' + Math.round(u.maxHp));
-      bar.appendChild(fill); bar.appendChild(span);
-      wrap.appendChild(bar);
-      state.enemyBarCache[u.uid || ('t' + i)] = { fill: fill, span: span, u: u };
-    });
-    var more = battle.enemies.length - 5;
-    if (more > 0) wrap.appendChild(el('div', 'battle-name', '还有 ' + more + ' 只敌人'));
+    /* 小怪血条已经直接画在每只怪头顶，Boss 走屏幕顶部的大血条，
+       这里不再重复列一排名字+血条，只在多敌人时提示剩余数量。 */
+    var alive = battle.enemies.filter(function (u) { return !u.dead && !u.isBoss; });
+    if (alive.length > 1) {
+      wrap.appendChild(el('div', 'battle-name', '剩余 ' + alive.length + ' 只小怪'));
+    }
   }
 
   /* 武器切换条 + 药水按钮（每帧刷新状态） */
@@ -5093,7 +5162,8 @@ window.TR_DATA = {"items": [{"id": "melee_wooden_sword", "name": "木剑", "name
     updateHud(battle);
     updateBattleButtons(battle);
     UI.showScreen('battle');
-    state.speed = 1;
+    /* 不要在这里重置倍速：玩家选的 2×/4× 应该跨战斗保留。
+       之前这里写了 state.speed = 1，导致每场战斗都掉回 1×。 */
     state.lastFrame = 0;
     cancelAnimationFrame(state.raf);
     state.raf = requestAnimationFrame(UI.battleFrame);
@@ -5337,12 +5407,21 @@ window.TR_DATA = {"items": [{"id": "melee_wooden_sword", "name": "木剑", "name
   function rewardItems(list, container, labelPrefix) {
     var run = state.run;
     var got = [];
+    /* 越级检查：事件奖励是"直接指定物品 id"的，会绕过章节等级限制
+       （比如第 3 章的事件掉 T8 武器）。这里按当前章节上限过滤，
+       药水/消耗品不受限制。 */
+    var maxTier = (TR.CHAPTER_GEAR && TR.CHAPTER_GEAR.max[Math.min(9, run.chapter | 0)]);
+    if (maxTier == null) maxTier = 9;
+    var capped = [];
     (list || []).forEach(function (l) {
       var chance = l.chance == null ? 1 : l.chance;
       if (Math.random() > chance) return;
       var inst = { kind: 'item', id: l.item };
       var def = TR.instDef(inst);
       if (!def) return;
+      var isGear = (def.item && (def.item.type === 'weapon' || def.item.type === 'accessory')) || def.set;
+      var t = def.item ? (def.item.tier || 0) : (def.set ? (def.set.tier || 0) : 0);
+      if (isGear && t > maxTier) { capped.push(def.name); return; }
       got.push(def);
       if (!TR.owns(run, inst)) {
         var freeSlot = def.item && def.item.type === 'accessory' && run.equipped.accessories.filter(Boolean).length < run.accSlots;
@@ -5351,6 +5430,9 @@ window.TR_DATA = {"items": [{"id": "melee_wooden_sword", "name": "木剑", "name
         else TR.equipInst(run, inst);
       }
     });
+    if (capped.length) {
+      container.appendChild(el('span', 'tag', '本章不产出更高阶装备：' + capped.join('、')));
+    }
     if (!got.length) {
       container.appendChild(el('span', 'tag', labelPrefix + '：这次没有掉落'));
       return;
@@ -6031,14 +6113,37 @@ window.TR_DATA = {"items": [{"id": "melee_wooden_sword", "name": "木剑", "name
     };
     $('btn-loadout').onclick = function () { UI.showLoadout(state.screen); };
     $('btn-menu').onclick = UI.showMenu;
+    /* 恢复上次选择的倍速并同步按钮高亮：
+       否则一刷新页面或开新战斗就掉回 1×。
+       注意 SPEED_VER：底速从 0.28 提到 0.84（整体快 3 倍）后，升一次版本，
+       把旧版本存下的 2×/4× 重置回 1×，避免"新底速 × 旧 4×"快得离谱。 */
+    var SPEED_VER = '2';
+    try {
+      var st = root.localStorage;
+      if (st) {
+        if (st.getItem('trrg_speed_v') === SPEED_VER) {
+          var savedSpeed = parseFloat(st.getItem('trrg_speed'));
+          if (savedSpeed === 1 || savedSpeed === 2 || savedSpeed === 4) state.speed = savedSpeed;
+        } else {
+          st.setItem('trrg_speed_v', SPEED_VER);
+          st.setItem('trrg_speed', '1');
+          state.speed = 1;
+        }
+      }
+    } catch (e) { /* 无 localStorage 时忽略 */ }
+    var syncSpeedButtons = function () {
+      Array.prototype.forEach.call(document.querySelectorAll('[data-speed]'), function (x) {
+        if (x.classList) x.classList.toggle('active', parseFloat(x.getAttribute('data-speed')) === state.speed);
+      });
+    };
+    syncSpeedButtons();
     Array.prototype.forEach.call(document.querySelectorAll('[data-speed]'), function (b) {
       b.onclick = function () {
         state.speed = parseFloat(b.getAttribute('data-speed')) || 1;
+        try { if (root.localStorage) root.localStorage.setItem('trrg_speed', String(state.speed)); } catch (e) { }
         UI.toast('速度 ' + state.speed + '×');
         /* 让所有倍速按钮显示选中态 */
-        Array.prototype.forEach.call(document.querySelectorAll('[data-speed]'), function (x) {
-          if (x.classList) x.classList.toggle('active', parseFloat(x.getAttribute('data-speed')) === state.speed);
-        });
+        syncSpeedButtons();
       };
     });
   };
