@@ -2193,6 +2193,9 @@ window.TR_DATA = {"items": [{"id": "melee_wooden_sword", "name": "木剑", "name
     minionDmgMul: 2.2,       /* 召唤物/哨兵额外伤害倍率（召唤师靠数量，单体偏弱） */
     magicDmgMul: 1.25,       /* 法师伤害补偿（受魔力上限压制，出手次数更少） */
     trashHpCap: [150, 240, 360, 520, 720, 950, 1200, 1500, 1800, 2200],  /* 小怪血量按 tier 封顶 */
+    /* 场上同时存在的敌人上限（含召唤出来的分裂体）。
+       主要防"分裂自己"类技能指数爆炸把战斗卡死。 */
+    maxEnemies: 16,
     eliteHpMul: 1.5,         /* 精英允许的血量上限倍率 */
     trashDefCap: 60,         /* 小怪防御封顶（防千足蜈蚣那种 1000 防） */
     /* 人物贴图朝向：泰拉瑞亚的部件表是"朝右"还是"朝左"，如果小人背对着敌人，
@@ -3547,11 +3550,22 @@ window.TR_DATA = {"items": [{"id": "melee_wooden_sword", "name": "木剑", "name
         return true;
       case 'spawn_adds':
         var spawnDef = TR.enemyDef(ab.spawn);
-        if (spawnDef) {
-          for (var k = 0; k < (ab.count || 2); k++) {
-            battle.addEnemy(spawnDef, { x: u.x + rnd(-40, 40), y: Math.max(90, u.y - rnd(-20, 40)) });
+        /* 防止"分裂自己"指数爆炸把战斗卡死（星细胞每 8 秒分裂 2 只自己，
+           子代又继续分裂 → 2→4→8→16… 直接卡住）：
+             1) 被召唤出来的单位打上 noAdds，只允许分裂一代；
+             2) 全场存活敌人有硬上限，满了就不再召唤。 */
+        if (spawnDef && !u.noAdds) {
+          var aliveNow = 0;
+          for (var ci = 0; ci < battle.enemies.length; ci++) if (!battle.enemies[ci].dead) aliveNow++;
+          var room = Math.max(0, (TUNE.maxEnemies || 16) - aliveNow);
+          var spawnN = Math.min(ab.count || 2, room);
+          for (var k = 0; k < spawnN; k++) {
+            var add = battle.addEnemy(spawnDef, { x: u.x + rnd(-40, 40), y: Math.max(90, u.y - rnd(-20, 40)) });
+            if (add) add.noAdds = true;   /* 只允许一代，杜绝指数增长 */
           }
-          battle.log(u.name + ' 召唤了 ' + (ab.count || 2) + ' 只' + spawnDef.name, 'l-sys');
+          if (spawnN > 0) {
+            battle.log(u.name + ' 召唤了 ' + spawnN + ' 只' + spawnDef.name, 'l-sys');
+          }
         }
         return true;
       case 'shield':
