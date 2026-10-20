@@ -316,11 +316,10 @@ body { display: flex; justify-content: center; }
 /* ============ 右上角公告入口 ============ */
 .news-btn {
   position: fixed; top: 10px; z-index: 60;
-  /* 贴住中间黑色栏（#app，max-width 560px）的右上角，而不是浏览器窗口右边缘。
-     窗口够宽时按居中留白计算；窄屏则退回 10px。 */
+  /* right 由 JS 实测 #app 右边缘反算（ui.js syncNewsButtonPos），
+     不用 100vw —— 缩放/无头/移动端下 100vw 常有偏差 */
   right: 10px;
-  right: max(10px, calc((100vw - 560px) / 2 + 10px));
-  max-width: calc(100vw - 16px);
+  max-width: 46vw;
   display: flex; align-items: center; gap: 5px;
   padding: 6px 11px; border-radius: 16px;
   background: rgba(28, 33, 54, .94);
@@ -406,6 +405,101 @@ body { display: flex; justify-content: center; }
   background: rgba(242, 193, 78, .15);
 }
 
+/* ============ 装备界面：完成按钮固定在右上角 ============ */
+#screen-loadout { position: relative; }
+/* 装备界面的「完成」按钮
+   要点：
+     1) 贴着 #app（max-width 560px）的右边缘，而不是浏览器窗口右边缘
+     2) top 用 --topbar-h 变量，避免和顶栏重叠（窄屏顶栏会换行变高）
+     3) fixed + 在 .screen 外面，避免被 overflow 裁切
+   right 由 JS 实测 #app 的右边缘算出（见 ui.js syncDoneButtonPos），
+   比 100vw 计算式可靠（无头/缩放下 100vw 常有偏差）。 */
+.lo-done {
+  position: fixed;
+  top: calc(var(--topbar-h, 54px) + 10px);
+  right: 12px;
+  z-index: 80;
+  padding: 8px 20px; border-radius: 22px;
+  font-size: 14px; font-weight: 700;
+  white-space: nowrap;
+  box-shadow: 0 4px 16px rgba(80, 120, 255, .55);
+}
+/* 只在装备界面显示 */
+.lo-done.gone { display: none !important; }
+.lo-bottom-close { clear: both; padding: 18px 0 26px; text-align: center; }
+.lo-bottom-close .btn { min-width: 180px; padding: 13px 0; }
+
+/* 详情面板：固定在底部，带关闭按钮 */
+#lo-detail {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 60;
+  max-height: 62vh; overflow-y: auto;
+  margin: 0 auto; max-width: 560px;
+  background: #161b2b;
+  border-top-left-radius: 16px; border-top-right-radius: 16px;
+  border-top: 2px solid #3a4568;
+  padding: 14px 16px 20px;
+  box-shadow: 0 -8px 30px rgba(0, 0, 0, .6);
+}
+#lo-detail .d-btns { margin-top: 12px; }
+#lo-detail .d-btns .btn { flex: 1; min-width: 88px; }
+
+/* 详情面板顶部：标题 + 关闭 */
+#lo-detail .d-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 10px; margin-bottom: 8px;
+}
+#lo-detail .d-head h4 { margin: 0; flex: 1; }
+#lo-detail .d-close {
+  flex: none; width: 34px; height: 34px; border-radius: 50%;
+  border: 1px solid var(--line); background: #232a44;
+  color: var(--dim); font-size: 16px; line-height: 1; cursor: pointer;
+}
+#lo-detail .d-close:active { background: #2d3556; }
+
+/* ============ 奖励物品标签里的图标：必须限死尺寸 ============ */
+.loot { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.loot .tag {
+  display: inline-flex; align-items: center; gap: 5px;
+  max-width: 100%;
+}
+.loot .tag img,
+.loot .tag canvas {
+  width: 20px !important; height: 20px !important;
+  flex: none; object-fit: contain; image-rendering: pixelated;
+}
+.loot .tag .s-emoji { font-size: 15px; line-height: 1; }
+
+/* ============ 禁用长按弹系统菜单（保存图片/看图模式等） ============ */
+/* 手机浏览器长按 <img> 会弹出"保存图片/复制图片"，破坏长按看详情的操作 */
+.slot img,
+.loot img,
+#lo-bag img,
+#lo-equipped img,
+.icon img,
+.tag img {
+  -webkit-touch-callout: none !important;   /* iOS */
+  -webkit-user-select: none !important;
+  user-select: none !important;
+  pointer-events: none !important;          /* 让事件落在父元素（槽位）上 */
+  -webkit-user-drag: none !important;
+}
+/* 整个装备界面也禁掉文本选择与长按菜单 */
+#screen-loadout {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+#screen-loadout img {
+  pointer-events: none;
+  -webkit-touch-callout: none;
+  -webkit-user-drag: none;
+}
+/* 避免长按触发浏览器默认行为（含"手动标记广告"这类） */
+.slot, .tag, .loot {
+  -webkit-touch-callout: none;
+  touch-action: manipulation;
+}
+
 </style>
 </head>
 <body>
@@ -466,6 +560,9 @@ body { display: flex; justify-content: center; }
 </script>
 
 <div id="app">
+
+  <!-- 装备界面的「完成」：放在 .screen 外面，避免被 overflow 裁切 -->
+  <button class="btn primary lo-done gone" id="btn-lo-close">完成</button>
 
   <!-- 右上角公告入口（标题界面显示，有未读更新时带红点） -->
   <button id="btn-news" class="news-btn" title="更新公告">
@@ -558,7 +655,9 @@ body { display: flex; justify-content: center; }
     <div id="lo-bag" class="grid-bag"></div>
     <div id="lo-extra"></div>
     <div id="lo-detail" class="detail hidden"></div>
-    <button class="btn primary" id="btn-lo-close">完成</button>
+    <div class="lo-bottom-close">
+      <button class="btn primary" id="btn-lo-close2">完成</button>
+    </div>
   </section>
 
   <!-- ============ 战斗 ============ -->
@@ -795,14 +894,14 @@ window.TR_DATA = {"items": [{"id": "melee_wooden_sword", "name": "木剑", "name
     },
     expert: {
       id: 'expert', name: '专家', short: '专家',
-      hpMul: 2, dmgMul: 2, accessorySlots: 6, bagSize: 9, rerolls: 2,
+      hpMul: 1.72, dmgMul: 1.72, accessorySlots: 6, bagSize: 9, rerolls: 2,
       soulsMul: 2, color: '#ffb454', expert: true,
       desc: '敌人血量 ×2、伤害 ×2；Boss 解锁专家专属招式，并且<b>每个 Boss 必掉 1 件专属饰品</b>（克苏鲁之盾、蠕虫围巾、蜂巢背包…）。',
       perks: '饰品槽 6 · 背包 9 格 · 宝藏袋必出 1 件'
     },
     master: {
       id: 'master', name: '大师', short: '大师',
-      hpMul: 3, dmgMul: 3, accessorySlots: 7, bagSize: 10, rerolls: 3,
+      hpMul: 2.3, dmgMul: 2.3, accessorySlots: 7, bagSize: 10, rerolls: 3,
       soulsMul: 3, color: '#ff6a6a', expert: true, master: true,
       desc: '敌人血量 ×3、伤害 ×3；继承专家全部内容，而且<b>宝藏袋里的东西全部必掉</b>（含大师专属饰品），额外多 1 个饰品槽。',
       perks: '饰品槽 7 · 背包 10 格 · 宝藏袋全必掉'
@@ -938,7 +1037,7 @@ window.TR_DATA = {"items": [{"id": "melee_wooden_sword", "name": "木剑", "name
   ];
 
   TR.meta = {
-    souls: 0, levels: {},
+    souls: 0, levels: {}, plays: 0,
     load: function () {
       try {
         var raw = root.localStorage && root.localStorage.getItem('trrg_meta');
@@ -946,6 +1045,7 @@ window.TR_DATA = {"items": [{"id": "melee_wooden_sword", "name": "木剑", "name
           var o = JSON.parse(raw);
           this.souls = o.souls || 0;
           this.levels = o.levels || {};
+          this.plays = o.plays || 0;
         }
       } catch (e) { /* 无 localStorage（node 测试） */ }
       return this;
@@ -953,11 +1053,14 @@ window.TR_DATA = {"items": [{"id": "melee_wooden_sword", "name": "木剑", "name
     save: function () {
       try {
         if (root.localStorage) {
-          root.localStorage.setItem('trrg_meta', JSON.stringify({ souls: this.souls, levels: this.levels }));
+          root.localStorage.setItem('trrg_meta', JSON.stringify({
+            souls: this.souls, levels: this.levels, plays: this.plays
+          }));
         }
       } catch (e) { /* ignore */ }
     },
     levelOf: function (id) { return this.levels[id] || 0; },
+    /* 升级成本：指数增长（1.55^n），让"点满"需要长期积累 */
     costOf: function (u) { return Math.round(u.cost * Math.pow(1.55, this.levelOf(u.id))); },
     canBuy: function (u) {
       return this.levelOf(u.id) < u.max && this.souls >= this.costOf(u);
@@ -2231,16 +2334,31 @@ window.TR_DATA = {"items": [{"id": "melee_wooden_sword", "name": "木剑", "name
   };
 
   /* 星魂结算 */
+  /* 星魂结算：加了两重"成长瓶颈"，避免早期刷满就变无脑。
+     1) 局数递减：每多打一局，收益按累计局数衰减（最低 45%）
+     2) 每局硬上限：单局最多 260 星魂
+     这样"第 1 局 ~80，第 10 局 ~40"的曲线，既保留进度感又不会滚雪球。 */
   TR.settleSouls = function (run) {
     var diff = TR.DIFF[run.diff] || TR.DIFF.normal;
     var base = run.bossKills * 12 + Math.floor(run.kills * 0.4) + run.chapter * 6;
     if (run.won) base += 120;
     var mul = diff.soulsMul * (1 + (run.metaGrant && run.metaGrant.special.soulMul || 0));
     var total = Math.max(3, Math.round(base * mul));
+
+    /* 瓶颈 1：累计局数越多，单局收益越低（1.0 → 0.45） */
+    var plays = TR.meta.plays || 0;
+    var decay = Math.max(0.45, 1 - plays * 0.035);
+    total = Math.round(total * decay);
+
+    /* 瓶颈 2：单局上限 */
+    total = Math.min(total, TR.SOUL_CAP_PER_RUN || 260);
+
+    TR.meta.plays = plays + 1;
     TR.meta.souls += total;
     TR.meta.save();
     return total;
   };
+  TR.SOUL_CAP_PER_RUN = 260;
 
   TR.util.formatStat = function (stat, val) {
     var names = {
@@ -2311,18 +2429,28 @@ window.TR_DATA = {"items": [{"id": "melee_wooden_sword", "name": "木剑", "name
     pacePlayerHpMul: 1.0,
     enemyAbilityCdMul: 1.0,   /* 敌人技能冷却不再额外拉长（原来 1.3 是削弱敌人） */
     /* Boss 攻击欲望：冷却乘这个系数（<1 = 打得更勤）。
-       之前 Boss 只在原地晃、好半天才放一次技能，压迫感不足。 */
+       专家/大师下 Boss 会连发专属招式，压迫感已经够强，
+       所以这里给高难度一个"放宽"——否则玩家会被技能淹死。 */
     bossAtkCdMul: 0.95,
+    bossAtkCdMulExpert: 1.15,    /* 专家：Boss 出手间隔 +15% */
+    bossAtkCdMulMaster: 1.30,    /* 大师：再多放宽（它还有额外阶段，否则技能糊脸） */
     waveHealPct: 0.10,
     /* 敌人伤害：只保留一层系数，数值直接对齐原版手感。
        之前是 enemyDmgMul(0.15) × paceEnemyDmgMul(0.16) = 2.4%，等于敌人打你几乎不掉血。
        现在合并成一个，普通难度就是原版伤害的 55%。 */
-    enemyDmgMul: { normal: 0.68, expert: 0.85, master: 1.03 },
+    enemyDmgMul: { normal: 0.68, expert: 0.79, master: 0.92 },
     /* 单次受击上限：原版没有这个限制，只在"防止被一发秒杀"时生效。
        设成 35% 意味着：残血时被 Boss 大招打中会直接掉三分之一血，很危险但不至于瞬死。 */
     hitCapPct: 0.18,
-    /* 无敌帧：原版 0.67 秒（40 帧），这里取 0.6 秒接近原版 */
+    hitCapPctExpert: 0.15,       /* 专家：单次受伤上限 15% */
+    hitCapPctMaster: 0.13,       /* 大师：单次受伤上限 13% */
+    /* 无敌帧：原版 0.67 秒（40 帧），这里取 0.6 秒接近原版。
+       专家/大师额外延长 —— 因为 Boss 伤害已经顶到 18% 受击上限，
+       再调伤害没用，唯一能降低难度的手段就是"少挨几下"。
+       0.6 / 0.78 / 0.9 对应 1.7 / 2.2 / 2.5 次每秒的最大受伤频率。 */
     invulnTime: 0.6,
+    invulnTimeExpert: 0.78,
+    invulnTimeMaster: 0.90,
     /* 远程/魔法武器最大飞行距离（像素）。
        窗口只有 480px 宽，之前封顶 420 会截断 44 把长射程武器，
        而且远程职业的站位比这还近，射程根本用不上。
@@ -2345,7 +2473,11 @@ window.TR_DATA = {"items": [{"id": "melee_wooden_sword", "name": "木剑", "name
        所以后期 Boss 不能拖太久，否则必被耗死。 */
     bossTargetSec: function (ch) { return 60 + ch * 8; },   /* 1 章 60 秒 → 10 章 132 秒 */
     bossHpBand: [0.55, 1.0],  /* 允许偏离目标血量的比例区间（上限压到 1.0，后期不再膨胀） */
-    diffDpsMul: { normal: 1, expert: 1.25, master: 1.45 },
+    /* Boss 血量随难度的放大系数（决定"要打多久"）。
+       之前 1.25/1.45 太厚，玩家在 Boss 技能循环里被磨死。
+       降到 1.10/1.28：专家/大师的压迫感主要来自"招式更多、伤害更高"，
+       而不是"血条更长"。 */
+    diffDpsMul: { normal: 1, expert: 1.0, master: 1.15 },
     potionHealPct: 0.35,     /* 治疗药水回复比例 */
     potionCount: 6,          /* 开局药水数（药水疾病让一场只能喝 1 瓶，所以多给几瓶） */
     /* 原版"药水疾病"：喝完治疗药水后这段时间内不能再喝（原版 60 秒，这里按难度略降） */
@@ -2757,16 +2889,16 @@ window.TR_DATA = {"items": [{"id": "melee_wooden_sword", "name": "木剑", "name
       var extraNames = extraAbil.map(function (a) { return a.name; }).filter(Boolean);
       phases.push({
         atHpPct: 0.28, name: '专家阶段 · 狂暴', addAbilities: extraNames,
-        mods: [{ stat: 'dmgPct', value: 0.12 }, { stat: 'atkSpeedPct', value: 0.15 }]
+        mods: [{ stat: 'dmgPct', value: 0.08 }, { stat: 'atkSpeedPct', value: 0.10 }]
       });
       if (diff.id === 'master') {
         phases.push({
           atHpPct: 0.55, name: '大师阶段 · 觉醒', addAbilities: [],
-          mods: [{ stat: 'dmgPct', value: 0.10 }, { stat: 'moveSpeedPct', value: 0.15 }]
+          mods: [{ stat: 'dmgPct', value: 0.07 }, { stat: 'moveSpeedPct', value: 0.10 }]
         });
         phases.push({
           atHpPct: 0.15, name: '大师阶段 · 濒死狂怒', addAbilities: [],
-          mods: [{ stat: 'dmgPct', value: 0.18 }, { stat: 'atkSpeedPct', value: 0.20 }]
+          mods: [{ stat: 'dmgPct', value: 0.12 }, { stat: 'atkSpeedPct', value: 0.14 }]
         });
       }
     }
@@ -2930,11 +3062,17 @@ window.TR_DATA = {"items": [{"id": "melee_wooden_sword", "name": "木剑", "name
     var y = o.y != null ? o.y : (def.ai === 'flyer' || def.ai === 'worm' ? GROUND - 28 : GROUND);
       var u = makeEnemy(def, enc2, battle.diff, x, { y: y, scaleMul: o.scaleMul, noElite: o.noElite, eliteTint: def.elite && !o.noElite ? '#ff9a6a' : null });
       if (def.isBoss) {
-        /* Boss 出生点：贴地，并且在**玩家前方**（不再用世界绝对坐标，
-           否则世界变长后 Boss 会被放到很远的右边） */
-        u.x = TR.util.clamp(battle.player.x + 430,
-          WALL + TUNE.enemyWallMargin, WORLD_W - WALL - TUNE.enemyWallMargin);
-        u.y = GROUND - 24;
+        /* Boss 出生点：贴地，并且在**玩家前方**。
+           注意：多节 Boss 的**部件**不能走这里 —— expandBossParts 已经用
+           baseX+offX 摆好了位置，再重置会把三个部件叠到同一点
+           （骷髅王就是这么被推到左墙角的）。部件靠 def.id 里的 '#' 标记识别
+           （isPart 是在 addEnemy 返回之后才赋值的，这里读不到）。 */
+        var isPartDef = String(def.id || '').indexOf('#') >= 0;
+        if (!isPartDef) {
+          u.x = TR.util.clamp(battle.player.x + 430,
+            WALL + TUNE.enemyWallMargin, WORLD_W - WALL - TUNE.enemyWallMargin);
+          u.y = GROUND - 24;
+        }
         battle.bossSeen = true;
         battle.sfxPush('boss');
         battle.say('⚔ ' + def.name, 2.4);
@@ -2964,7 +3102,11 @@ window.TR_DATA = {"items": [{"id": "melee_wooden_sword", "name": "木剑", "name
           nameEn: def.nameEn, isBoss: !!pt.main, tier: def.tier, chapter: def.chapter,
           tNpcId: pt.npcId != null ? pt.npcId : def.tNpcId,
           base: {
-            hp: Math.max(1, Math.round(def.base.hp * (pt.hpMul || 0.1))),
+            /* 部件血量：非主体部件再乘一个打折系数。
+               多节 Boss 有"主体 + 两只手"三段血条，专家/大师倍率叠上去后
+               总血量会到 6800+，玩家 210 血根本打不完（实测四职业全灭）。
+               所以部件按 0.62 打折，Boss 总血量更接近"单体 Boss × 1.3"。 */
+            hp: Math.max(1, Math.round(def.base.hp * (pt.hpMul || 0.1) * (pt.main ? 1 : 0.62))),
             dmg: (def.base.dmg || 10) * (pt.dmgMul || 0.8),
             def: def.base.def, speed: def.base.speed,
             size: pt.main ? def.base.size : Math.max(0.7, def.base.size * 0.55)
@@ -3009,9 +3151,15 @@ window.TR_DATA = {"items": [{"id": "melee_wooden_sword", "name": "木剑", "name
     if (enc0.kind === 'boss') {
       var b = TR.db.bossById[enc0.boss];
       if (b) {
-        /* 有 parts 的 Boss 走"多节"路径，否则单体 */
-        if (b.parts && b.parts.length) battle.expandBossParts(b, b.x, GROUND - 24);
-        else battle.addEnemy(b, { noElite: true });
+        /* 有 parts 的 Boss 走"多节"路径，否则单体。
+           注意：b 是**数据定义**（没有坐标），之前传 b.x 得到 undefined，
+           baseX+offX 变成 NaN，被 clamp 成 0 → 骷髅王三个部件全堆在世界最左端。
+           正确做法是传"玩家前方"的坐标。 */
+        if (b.parts && b.parts.length) {
+          var bossX = TR.util.clamp(battle.player.x + 430,
+            WALL + TUNE.enemyWallMargin, WORLD_W - WALL - TUNE.enemyWallMargin);
+          battle.expandBossParts(b, bossX, GROUND - 24);
+        } else battle.addEnemy(b, { noElite: true });
       }
       (enc0.adds || []).forEach(function (id) {
         var d = TR.enemyDef(id);
@@ -3134,12 +3282,37 @@ window.TR_DATA = {"items": [{"id": "melee_wooden_sword", "name": "木剑", "name
       return;
     }
     var effDef = Math.max(0, p.def);
-    var final = Math.max(1, dmg - effDef * 0.5) * p.dmgTakenMul;
+    /* ===== 防御减免 =====
+       之前是 Math.max(1, dmg - def*0.5)，那个 max(1,...) 导致
+       "防御再高也必吃 1 点"，玩家会觉得防御完全没用。
+       现在：
+         - 防御 ≥ 伤害时 → **完全格挡**（0 伤害，显示"格挡"）
+         - 否则按原版比例减伤，并保留极小保底（避免高防御完全免疫）
+       def*0.5 保留原系数，和之前手感一致。 */
+    var rawAfterDef = dmg - effDef * 0.5;
+    if (rawAfterDef <= 0) {
+      /* 完全格挡：不掉血、不进无敌帧（否则会白吃无敌） */
+      battle.texts.push({
+        x: p.x + rnd(-4, 4), y: p.y - 42, t: 0.7,
+        text: '格挡', color: '#8fd4ff'
+      });
+      battle.vfx.push({ kind: 'ring', x: p.x, y: p.y - 20, t: 0.22, color: '#8fd4ff' });
+      p.invuln = Math.max(p.invuln, 0.25);   /* 给一点间隔，避免被围殴时刷屏 */
+      return;
+    }
+    var final = rawAfterDef * p.dmgTakenMul;
     var emul = TUNE.enemyDmgMul[battle.diff.id];
     final *= (emul == null ? 0.55 : emul);
     /* 小怪额外伤害系数：小怪战也要有威胁，不能只有 Boss 能打死人 */
     if (opts.src && !opts.src.isBoss && !opts.src.isPart) final *= (TUNE.trashDmgMul || 1);
     final = Math.min(final, p.maxHp * TUNE.hitCapPct);
+    /* 专家/大师再压一层受击上限：Boss 的原始伤害普遍超过 18% 上限，
+       光调倍率没用（打 45 和打 258 都被截到 18%）。所以只能直接压低上限本身。
+       普通 18% / 专家 15% / 大师 13%。 */
+    var capPct = TUNE.hitCapPct;
+    if (battle.diff && battle.diff.id === 'master') capPct = TUNE.hitCapPctMaster || capPct;
+    else if (battle.diff && battle.diff.expert) capPct = TUNE.hitCapPctExpert || capPct;
+    final = Math.min(final, p.maxHp * capPct);
     /* 接触伤害单独打折：必须放在"上限"之后，否则高伤 Boss 会被上限顶住、系数形同虚设。
        玩家是自动走位且一路向右，近战必然贴脸，接触伤害得温和。 */
     if (opts.contact) final *= (TUNE.contactDmgMul == null ? 1 : TUNE.contactDmgMul);
@@ -3159,7 +3332,11 @@ window.TR_DATA = {"items": [{"id": "melee_wooden_sword", "name": "木剑", "name
     }
     if (final > 0) {
       p.hp -= final;
-      p.invuln = TUNE.invulnTime;
+      /* 无敌帧按难度取值：专家/大师更长，降低"被连击糊死"的概率 */
+      var ivt = TUNE.invulnTime;
+      if (battle.diff && battle.diff.id === 'master') ivt = TUNE.invulnTimeMaster || ivt;
+      else if (battle.diff && battle.diff.expert) ivt = TUNE.invulnTimeExpert || ivt;
+      p.invuln = ivt;
       battle.sfxPush('hurt');
       battle.dmgTaken += final;
       battle.texts.push({ x: p.x + rnd(-5, 5), y: p.y - 42, t: 0.8, text: '-' + Math.round(final), color: '#ff8a98' });
@@ -4090,6 +4267,12 @@ window.TR_DATA = {"items": [{"id": "melee_wooden_sword", "name": "木剑", "name
           if (spdAdd < 0.35) spdAdd = 0.35;
           var baseCd = Math.max(0.5, (eab.def.cd || 3) / spdAdd);
           var mul = TUNE.enemyAbilityCdMul * (u.isBoss ? (TUNE.bossAtkCdMul || 1) : 1);
+          /* 专家/大师：Boss 出手再放宽一点，避免玩家被专属招式淹没 */
+          if (u.isBoss && battle.diff && battle.diff.expert) {
+            mul *= (battle.diff.id === 'master'
+              ? (TUNE.bossAtkCdMulMaster || 1)
+              : (TUNE.bossAtkCdMulExpert || 1));
+          }
           eab.t = Math.max(0.45, baseCd * mul);
           if (!ok) eab.t = 1.0;
         }
@@ -4584,13 +4767,17 @@ window.TR_DATA = {"items": [{"id": "melee_wooden_sword", "name": "木剑", "name
   /* 计算一个单位"实际画出来的那一帧"的尺寸。
      NPC 贴图是竖排多帧，rect() 用的是整张表，直接用会把血条顶到天上。 */
   function unitFrame(img, rectW, rectH) {
-    if (!img) return { fw: rectW, fr: 1, fh: rectH, dw: rectW, dh: rectH };
+    if (!img) return { fw: rectW, fr: 1, fh: rectH, dw: rectW, dh: rectH, fy: 0 };
     var fw = img.width;
+    /* 帧数：用 round，但帧高必须取整数 —— 小数帧高会让 drawImage 采样到
+       相邻帧的边缘，出现"灰色方块/残影"（克苏鲁之眼 110x996 就是这种：
+       996/9=110.67，非整数）。 */
     var fr = Math.max(1, Math.round(img.height / Math.max(1, fw)));
-    var fh = img.height / fr;
+    var fh = Math.floor(img.height / fr);
+    var fy = Math.floor((img.height - fh * fr) / 2);   /* 多出来的像素上下平分 */
     var dw = rectW;
     var dh = Math.min(rectH, rectW * (fh / Math.max(1, fw)));
-    return { fw: fw, fr: fr, fh: fh, dw: dw, dh: dh };
+    return { fw: fw, fr: fr, fh: fh, dw: dw, dh: dh, fy: Math.max(0, fy) };
   }
 
   /* 一把武器的**实际攻击距离**（从角色中心算起，px）。
@@ -4632,7 +4819,7 @@ window.TR_DATA = {"items": [{"id": "melee_wooden_sword", "name": "木剑", "name
       ctx.translate(u.x, u.y);
       if (u.facing > 0) ctx.scale(-1, 1);
       if (u.hitFlash > 0) { ctx.globalAlpha = 0.85; }
-      ctx.drawImage(img, 0, idx * F.fh, F.fw, F.fh, -F.dw / 2, -F.dh, F.dw, F.dh);
+      ctx.drawImage(img, 0, F.fy + idx * F.fh, F.fw, F.fh, -F.dw / 2, -F.dh, F.dw, F.dh);
       ctx.restore();
     } else {
       ctx.fillStyle = u.hitFlash > 0 ? '#ffffff' : u.color;
@@ -5145,7 +5332,12 @@ window.TR_DATA = {"items": [{"id": "melee_wooden_sword", "name": "木剑", "name
     if (url) {
       var img = el('img');
       img.src = url; img.alt = '';
-      img.style.cssText = 'width:100%;height:100%;object-fit:contain;image-rendering:pixelated';
+      /* 关键：禁掉手机长按图片弹出的系统菜单（"保存图片/复制图片/看图模式"），
+         否则在装备界面长按看详情会被浏览器抢走手势。 */
+      img.draggable = false;
+      img.setAttribute('draggable', 'false');
+      img.style.cssText = 'width:100%;height:100%;object-fit:contain;image-rendering:pixelated;' +
+        'pointer-events:none;-webkit-touch-callout:none;-webkit-user-drag:none;user-select:none';
       return img;
     }
     return el('span', 's-emoji', emoji);
@@ -5266,6 +5458,43 @@ window.TR_DATA = {"items": [{"id": "melee_wooden_sword", "name": "木剑", "name
 
   /* ------------------------------------------------------------ 屏幕切换 */
   var SCREENS = ['title', 'difficulty', 'class', 'map', 'choice', 'loadout', 'battle', 'result', 'meta'];
+
+  /* 顶栏在窄屏会折行（flex-wrap），高度不固定。
+     实测高度写进 CSS 变量 --topbar-h，供固定定位的按钮避开它。
+     顶栏隐藏时按 0 算（标题页）。 */
+  UI.syncTopbarHeight = function () {
+    var tb = $('topbar');
+    var h = (tb && !tb.classList.contains('hidden')) ? tb.getBoundingClientRect().height : 0;
+    document.documentElement.style.setProperty('--topbar-h', Math.round(h) + 'px');
+    UI.syncDoneButtonPos();
+    UI.syncNewsButtonPos();
+  };
+
+  /* 「完成」按钮的 right 值：用 #app 的实际右边缘反算。
+     为什么不用 CSS 的 calc((100vw - 560px)/2 + 12px)：
+     缩放 / 无头浏览器 / 移动端视口下 100vw 经常和实际布局宽度不一致，
+     算出来的位置会偏到屏幕外（实测 430px 窗口下按钮右边跑到 488 > 504）。
+     直接量 #app 的 getBoundingClientRect() 永远准。 */
+  UI.syncDoneButtonPos = function () {
+    UI._placeFixedToApp($('btn-lo-close'));
+  };
+  /* 公告按钮同理（它也是贴 #app 右上角） */
+  UI.syncNewsButtonPos = function () {
+    UI._placeFixedToApp($('btn-news'));
+  };
+  /* 把一个 fixed 元素贴到 #app 的右边缘（右侧留 gap 像素） */
+  UI._placeFixedToApp = function (btn, gap) {
+    var app = $('app');
+    if (!btn || !app) return;
+    gap = gap == null ? 12 : gap;
+    var ar = app.getBoundingClientRect();
+    var vw = document.documentElement.clientWidth || window.innerWidth;
+    var rightGap = Math.max(0, vw - ar.right) + gap;
+    /* 夹一下，保证按钮始终在视口内 */
+    var maxRight = Math.max(8, vw - (btn.offsetWidth || 60) - 6);
+    if (rightGap > maxRight) rightGap = maxRight;
+    btn.style.right = Math.round(rightGap) + 'px';
+  };
   UI.showScreen = function (name) {
     SCREENS.forEach(function (s) {
       var n = $('screen-' + s);
@@ -5273,8 +5502,16 @@ window.TR_DATA = {"items": [{"id": "melee_wooden_sword", "name": "木剑", "name
     });
     state.screen = name;
     $('topbar').classList.toggle('hidden', name === 'title');
+    /* 完成按钮是 fixed 定位，只在装备界面显示 */
+    var doneBtn = $('btn-lo-close');
+    if (doneBtn) {
+      doneBtn.classList.toggle('gone', name !== 'loadout');
+      if (name === 'loadout') UI.syncDoneButtonPos();
+    }
     var w = $('screen-' + name);
     if (w) w.scrollTop = 0;
+    /* 顶栏高度可能因折行变化，切屏后重新量一次，让固定按钮避开 */
+    UI.syncTopbarHeight();
     UI.updateNewsBadge();
   };
 
@@ -5293,6 +5530,8 @@ window.TR_DATA = {"items": [{"id": "melee_wooden_sword", "name": "木剑", "name
     buffChip.textContent = '✨ 增益 ' + nBuff;
     buffChip.classList.toggle('hidden', nBuff === 0);
     $('tb-gold').textContent = '🪙 ' + TR.money(run.copper);
+    /* 顶栏内容变了（金币位数、增益按钮出现）也可能改变换行 → 重新量 */
+    UI.syncTopbarHeight();
   };
 
   /* ------------------------------------------------------------ 标题 / 难度 / 职业 */
@@ -5847,11 +6086,12 @@ window.TR_DATA = {"items": [{"id": "melee_wooden_sword", "name": "木剑", "name
     opts = opts || {};
     var run = state.run;
     var got = [];
-    /* 越级检查：事件奖励是"直接指定物品 id"的，会绕过章节等级限制
-       （比如第 3 章的事件掉 T8 武器）。这里按当前章节上限过滤，
-       药水/消耗品不受限制。 */
-    var maxTier = (TR.CHAPTER_GEAR && TR.CHAPTER_GEAR.max[Math.min(9, run.chapter | 0)]);
-    if (maxTier == null) maxTier = 9;
+    /* 越级过滤：只针对**商店/事件**这类"随机给装备"的场合。
+       Boss 掉落必须豁免 —— Boss 的专属饰品本来就是固定 tier，
+       如果按章节上限过滤（第 1 章 maxTier=0），会导致 Boss 什么都不掉。 */
+    var maxTier = opts.noTierCap ? 99
+      : (TR.CHAPTER_GEAR && TR.CHAPTER_GEAR.max[Math.min(9, run.chapter | 0)]);
+    if (maxTier == null) maxTier = 99;
     var capped = [];
     (list || []).forEach(function (l) {
       var chance = l.chance == null ? 1 : l.chance;
@@ -5865,10 +6105,12 @@ window.TR_DATA = {"items": [{"id": "melee_wooden_sword", "name": "木剑", "name
       if (isGear && t > maxTier) { capped.push(def.name); return; }
       got.push(def);
       if (!TR.owns(run, inst)) {
-        var freeSlot = def.item && def.item.type === 'accessory' && run.equipped.accessories.filter(Boolean).length < run.accSlots;
-        if (freeSlot) TR.equipInst(run, inst);
-        else if (!TR.bagAdd(run, inst)) { /* 背包满则忽略，稍后提示 */ }
-        else TR.equipInst(run, inst);
+        /* 直接收进背包；装备与否交给玩家在装备界面决定。
+           （之前是 bagAdd 成功后立刻 equipInst，可能"装着装着就没了"） */
+        if (!TR.bagAdd(run, inst)) {
+          /* 背包满：仍然记入 got 让玩家看到，但提示一句 */
+          if (TR.toast) TR.toast('背包已满，' + def.name + ' 未能放入');
+        }
       }
     });
     if (capped.length) {
@@ -5881,7 +6123,18 @@ window.TR_DATA = {"items": [{"id": "melee_wooden_sword", "name": "木剑", "name
     container.appendChild(el('span', 'tag', labelPrefix + '：'));
     got.forEach(function (d) {
       var t = el('span', 'tag');
-      t.appendChild(iconFor({ kind: d.inst.kind, inst: d.inst, def: d.item, set: d.set }));
+      var ico = iconFor({ kind: d.inst.kind, inst: d.inst, def: d.item, set: d.set });
+      /* 图标限制成 20x20：Boss 掉落的贴图原尺寸可能 32x110，
+         不限死会把整行撑成巨图（之前的显示问题）。 */
+      if (ico && ico.style) {
+        ico.style.width = '20px';
+        ico.style.height = '20px';
+        ico.style.flex = '0 0 20px';
+        ico.style.display = 'inline-block';
+        ico.style.objectFit = 'contain';
+        ico.style.imageRendering = 'pixelated';
+      }
+      t.appendChild(ico);
       t.appendChild(el('span', null, ' ' + d.name + (d.rarity ? '（' + TR.RARITY_NAME[d.rarity] + '）' : '')));
       container.appendChild(t);
     });
@@ -5966,16 +6219,16 @@ window.TR_DATA = {"items": [{"id": "melee_wooden_sword", "name": "木剑", "name
     var bag = el('div', 'loot');
     if (d.id === 'master') {
       var ml = boss.masterLoot || [];
-      rewardItems(ml, bag, '大师宝藏袋', { guarantee: true });
+      rewardItems(ml, bag, '大师宝藏袋', { guarantee: true, noTierCap: true });
       if (!bag.childNodes.length) bag.appendChild(el('span', 'tag', '大师宝藏袋：这次没有掉落'));
     } else if (d.expert) {
       var el2 = boss.expertLoot || [];
-      rewardItems(el2, bag, '专家宝藏袋', { guarantee: true });
+      rewardItems(el2, bag, '专家宝藏袋', { guarantee: true, noTierCap: true });
       if (!bag.childNodes.length) bag.appendChild(el('span', 'tag', '专家宝藏袋：这次没有掉落'));
     } else {
       /* 普通难度：也必掉 1~2 件饰品（按本章等级挑，已排除专家/大师专属） */
       var nd = boss.drops || [];
-      if (nd.length) rewardItems(nd, bag, '掉落', { guarantee: true });
+      if (nd.length) rewardItems(nd, bag, '掉落', { guarantee: true, noTierCap: true });
       else bag.appendChild(el('span', 'tag', '这次没有掉落'));
     }
     body.appendChild(bag);
@@ -6315,6 +6568,36 @@ window.TR_DATA = {"items": [{"id": "melee_wooden_sword", "name": "木剑", "name
       }
     }
 
+    /* 长按（500ms）打开详情 —— 手机上没有双击，长按最可靠。
+       注意：必须拦截 contextmenu / dragstart，否则手机浏览器会弹
+       "保存图片 / 复制图片 / 看图模式"的系统菜单，把手势抢走。 */
+    function attachLongPress(elm, inst) {
+      var timer = null;
+      elm.addEventListener('contextmenu', function (ev) { ev.preventDefault(); });
+      elm.addEventListener('dragstart', function (ev) { ev.preventDefault(); });
+      elm.addEventListener('pointerdown', function (ev) {
+        if (timer) clearTimeout(timer);
+        timer = setTimeout(function () {
+          timer = null;
+          elm._longPressed = true;
+          clearPick();
+          UI.showDetail(inst);
+        }, 500);
+      });
+      var cancel = function () {
+        if (timer) { clearTimeout(timer); timer = null; }
+      };
+      elm.addEventListener('pointerup', function () {
+        if (timer) { clearTimeout(timer); timer = null; }
+      });
+      elm.addEventListener('pointermove', function (ev) {
+        /* 稍微移动就当作拖动，取消长按 */
+        cancel();
+      });
+      elm.addEventListener('pointercancel', cancel);
+      elm.addEventListener('pointerleave', cancel);
+    }
+
     function slotEl(inst, slotLabel, desc) {
       /* 空槽也必须带 empty 类：否则"点选换装"找不到可放置的装备槽 */
       var s = el('div', 'slot ' + (inst ? 'filled' : 'empty'));
@@ -6322,6 +6605,7 @@ window.TR_DATA = {"items": [{"id": "melee_wooden_sword", "name": "木剑", "name
       /* 点选模式：点击任意槽位 → 若已有选中项就尝试放置，否则选中自己 */
       s.onclick = function () {
         if (s._dragged) { s._dragged = false; return; }
+        if (s._longPressed) { s._longPressed = false; return; }
         if (picked) {
           if (!desc) { clearPick(); return; }
           if (!sameDesc(picked.desc, desc)) {
@@ -6336,11 +6620,10 @@ window.TR_DATA = {"items": [{"id": "melee_wooden_sword", "name": "木剑", "name
         picked = { inst: inst, desc: desc };
         markTargets(desc);
         if (s.classList) s.classList.add('picked');
-        UI.toast('已选中「' + ((TR.instDef(inst) || {}).name || '装备') + '」，再点一个槽位换上（双击可看详情）');
+        UI.toast('已选中「' + ((TR.instDef(inst) || {}).name || '装备') + '」，再点槽位换上 · 长按看详情');
       };
       if (inst) {
-        /* 双击/长按看详情：换装以"点选"为主，详情退居次要入口 */
-        s.addEventListener('dblclick', function (ev) { ev.stopPropagation(); clearPick(); UI.showDetail(inst); });
+        attachLongPress(s, inst);
         s.appendChild(iconFor({ kind: inst.kind, inst: inst, def: (TR.instDef(inst) || {}).item, set: (TR.instDef(inst) || {}).set }));
         /* 拖动模式作为增强：手指按住拖动也能换 */
         s.style.touchAction = 'none';
@@ -6442,6 +6725,7 @@ window.TR_DATA = {"items": [{"id": "melee_wooden_sword", "name": "木剑", "name
       /* 点选模式：点背包物品 → 选中；已选中时点它 → 放回背包（卸下） */
       s.onclick = function () {
         if (s._dragged) { s._dragged = false; return; }
+        if (s._longPressed) { s._longPressed = false; return; }
         if (picked) {
           if (sameDesc(picked.desc, desc)) { clearPick(); UI.showLoadout(state.loadoutFrom); return; }
           /* 选中装备槽里的东西 + 点背包 = 卸下 */
@@ -6451,8 +6735,9 @@ window.TR_DATA = {"items": [{"id": "melee_wooden_sword", "name": "木剑", "name
         picked = { inst: b, desc: desc };
         markTargets(desc);
         if (s.classList) s.classList.add('picked');
-        UI.toast('已选中「' + ((d && d.name) || '装备') + '」，再点装备槽装上');
+        UI.toast('已选中「' + ((d && d.name) || '装备') + '」，再点装备槽装上 · 长按看详情');
       };
+      attachLongPress(s, b);       /* 背包格里长按也能看详情（丢弃按钮在详情面板里） */
       s.style.touchAction = 'none';
       s.addEventListener('pointerdown', function (ev) { s._dragged = false; startDrag(ev, b, desc, s); });
       s.addEventListener('pointermove', function (ev) { if (drag && drag.desc === desc) { if (drag.active) s._dragged = true; moveDrag(ev); } });
@@ -6485,7 +6770,13 @@ window.TR_DATA = {"items": [{"id": "melee_wooden_sword", "name": "木剑", "name
     clear(box);
     box.classList.remove('hidden');
     if (!d) return;
-    box.appendChild(el('h4', null, d.name + (d.nameEn ? ' <span class="en">' + d.nameEn + '</span>' : '')));
+    /* 顶部一行：标题 + 关闭按钮（详情是底部浮层，必须能随手收起） */
+    var head = el('div', 'd-head');
+    head.appendChild(el('h4', null, d.name + (d.nameEn ? ' <span class="en">' + d.nameEn + '</span>' : '')));
+    var closeBtn = el('button', 'd-close', '✕');
+    closeBtn.onclick = function () { box.classList.add('hidden'); };
+    head.appendChild(closeBtn);
+    box.appendChild(head);
     var rows = [];
     if (d.set) {
       rows.push('套装：' + d.set.name + '（' + TR.CLASS_NAME[d.set.class] + '）');
@@ -6544,6 +6835,8 @@ window.TR_DATA = {"items": [{"id": "melee_wooden_sword", "name": "木剑", "name
       };
       btns.appendChild(b2);
     }
+    /* 丢弃按钮：背包里的东西直接丢；身上装备的则"先卸下再丢"。
+       之前只判断 bagHas，导致点开装备中的物品时根本看不到丢弃按钮。 */
     if (TR.bagHas(run, inst)) {
       var b3 = el('button', 'btn danger', '丢弃');
       b3.onclick = function () {
@@ -6553,6 +6846,26 @@ window.TR_DATA = {"items": [{"id": "melee_wooden_sword", "name": "木剑", "name
         UI.showLoadout(state.loadoutFrom);
       };
       btns.appendChild(b3);
+    } else if (isEquipped) {
+      var b4 = el('button', 'btn danger', '卸下并丢弃');
+      b4.onclick = function () {
+        /* 先找出它所在的槽位并腾空，再丢弃（不进背包，直接消失） */
+        if (inst.kind === 'armor') {
+          run.equipped.armor[inst.slot] = null;
+        } else {
+          var iw = run.equipped.weapons.indexOf(key);
+          if (iw >= 0) run.equipped.weapons[iw] = null;
+          else {
+            var ia = run.equipped.accessories.indexOf(key);
+            if (ia >= 0) run.equipped.accessories[ia] = null;
+          }
+        }
+        TR.recalcHp(run);
+        TR.saveRun(run);
+        UI.toast('已卸下并丢弃 ' + d.name);
+        UI.showLoadout(state.loadoutFrom);
+      };
+      btns.appendChild(b4);
     }
     box.appendChild(btns);
     box.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
@@ -6694,6 +7007,8 @@ window.TR_DATA = {"items": [{"id": "melee_wooden_sword", "name": "木剑", "name
       var unread = !!(TR.CHANGELOG && newsSeen() !== TR.CHANGELOG.version);
       dot.classList.toggle('hidden', !unread);
     }
+    /* 公告按钮也贴 #app 右上角，用实测位置 */
+    if (show) UI.syncNewsButtonPos();
   };
 
   UI.showChangelog = function () {
@@ -6772,6 +7087,11 @@ window.TR_DATA = {"items": [{"id": "melee_wooden_sword", "name": "木剑", "name
     var unlock = function () { audioUnlock(); document.removeEventListener('pointerdown', unlock); document.removeEventListener('click', unlock); };
     document.addEventListener('pointerdown', unlock);
     document.addEventListener('click', unlock);
+
+    /* 窗口尺寸/方向变化后，重新量顶栏高度与按钮位置（手机横竖屏切换必用） */
+    var relayout = function () { try { UI.syncTopbarHeight(); } catch (e) { } };
+    window.addEventListener('resize', relayout);
+    window.addEventListener('orientationchange', function () { setTimeout(relayout, 120); });
 
     /* 联系方式：点一下复制（手机上没有剪贴板 API 时退化成"长按手动复制"提示） */
     document.body.addEventListener('click', function (ev) {
@@ -6855,11 +7175,15 @@ window.TR_DATA = {"items": [{"id": "melee_wooden_sword", "name": "木剑", "name
     UI.updateSoundBtn();
     $('btn-advance').onclick = UI.advance;
     $('btn-reroll').onclick = UI.reroll;
-    $('btn-lo-close').onclick = function () {
+    /* 两个「完成」按钮：右上角固定的那个 + 底部那个，行为一致 */
+    function closeLoadout() {
       var from = state.loadoutFrom;
       if (from === 'map' || state.run) UI.showMap();
       else UI.showTitle();
-    };
+    }
+    $('btn-lo-close').onclick = closeLoadout;
+    var loClose2 = $('btn-lo-close2');
+    if (loClose2) loClose2.onclick = closeLoadout;
     $('btn-loadout').onclick = function () { UI.showLoadout(state.screen); };
     $('btn-menu').onclick = UI.showMenu;
     var newsBtn = $('btn-news');
@@ -6960,6 +7284,19 @@ window.TR_DATA = {"items": [{"id": "melee_wooden_sword", "name": "木剑", "name
         root.__TR = TR;
         root.addEventListener('error', function (e) {
           TR.UI && TR.UI.toast && TR.UI.toast('脚本错误：' + (e.message || '未知'));
+        });
+        /* 全局禁用长按菜单：手机长按槽位会弹"保存图片/复制图片/看图模式"，
+           把"长按看详情"的手势抢走。输入框除外（要能粘贴）。 */
+        document.addEventListener('contextmenu', function (e) {
+          var t = e.target;
+          var tag = t && t.tagName ? String(t.tagName).toUpperCase() : '';
+          if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+          e.preventDefault();
+        }, { passive: false });
+        /* 阻止图片被拖动（桌面端拖图会中断换装手势） */
+        document.addEventListener('dragstart', function (e) {
+          var t = e.target;
+          if (t && t.tagName && String(t.tagName).toUpperCase() === 'IMG') e.preventDefault();
         });
       })
       .catch(function (err) {
