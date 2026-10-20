@@ -1649,13 +1649,17 @@ window.TR_DATA = {"items": [{"id": "melee_wooden_sword", "name": "木剑", "name
 
   /* ---------------------------------------------------------------- 重铸（哥布林工匠）
      花铜币把一件武器/饰品的词条重洗一遍——和原版一样，天赋词条越好多花点钱。 */
-  TR.reforgeCost = function (inst) {
+  /* 注意：这里必须把 run 作为参数传进来。
+     之前直接引用 run.chapter，但 run 只是 newRun 里的局部变量，
+     调用时会抛 ReferenceError，导致哥布林工匠的商店界面卡死。 */
+  TR.reforgeCost = function (inst, run) {
     var d = TR.instDef(inst);
     if (!d || !d.item) return 0;
     if (d.item.type !== 'weapon' && d.item.type !== 'accessory') return 0;
     var tier = d.tier || 0;
+    var chap = (run && run.chapter) || 0;
     var mult = d.mod ? (d.mod.kind === 'great' ? 2.2 : d.mod.kind === 'good' ? 1.5 : 1.0) : 1.0;
-    return TR.moneyJitter(TR.toCopper(Math.round((3 + tier * 3 + (run.chapter || 0) * 2) * mult)));
+    return TR.moneyJitter(TR.toCopper(Math.round((3 + tier * 3 + chap * 2) * mult)));
   };
   TR.canReforge = function (inst) {
     var d = TR.instDef(inst);
@@ -1673,7 +1677,7 @@ window.TR_DATA = {"items": [{"id": "melee_wooden_sword", "name": "木剑", "name
     var key = arr[index];
     if (!key) return { ok: false, reason: '空槽位' };
     var inst = TR.instFromKey(key);
-    var cost = TR.reforgeCost(inst);
+    var cost = TR.reforgeCost(inst, run);
     if (!TR.canReforge(inst)) return { ok: false, reason: '盔甲不能重铸' };
     if (run.copper < cost) return { ok: false, reason: '钱不够', cost: cost };
     var next = TR.rollReforge(inst);
@@ -1686,7 +1690,7 @@ window.TR_DATA = {"items": [{"id": "melee_wooden_sword", "name": "木剑", "name
   };
   /* 重铸背包里的一件 */
   TR.reforgeBagItem = function (run, inst) {
-    var cost = TR.reforgeCost(inst);
+    var cost = TR.reforgeCost(inst, run);
     if (!TR.canReforge(inst)) return { ok: false, reason: '盔甲不能重铸' };
     if (run.copper < cost) return { ok: false, reason: '钱不够', cost: cost };
     var next = TR.rollReforge(inst);
@@ -2041,7 +2045,11 @@ window.TR_DATA = {"items": [{"id": "melee_wooden_sword", "name": "木剑", "name
        Boss 血量公式里也乘了 timeScale，所以 Boss 战的真实时长基本不变，
        变快的是"动作看起来的速度"和杂兵战的节奏。 */
     timeScale: 0.84,
-    playerDmgMul: 3.8,       /* 玩家伤害倍率 */
+    /* 玩家伤害倍率。
+       原来 3.8 时单次伤害过大，"减去敌人防御×0.5"这点扣减完全看不出来
+       （打 200 减 8 等于没减）。降到 1.6 后单次伤害约为原来 42%，
+       配合下面同步下调的血量，战斗时长基本不变，但防御的减伤效果更明显。 */
+    playerDmgMul: 1.6,
     /* 生命上限用原版加法曲线（100 + 20/章 + 20/水晶 + 装备加成） */
     /* 节奏：把"双方血量池"一起放大、伤害数值不动 → 打架更久但看得清。
        （玩家血量池现在不再放大，只放大敌人血量池） */
@@ -2082,7 +2090,7 @@ window.TR_DATA = {"items": [{"id": "melee_wooden_sword", "name": "木剑", "name
     /* 注意：target = expectedDps × timeScale × 目标秒数，
        所以 timeScale 变快时血量会跟着涨、战斗在"游戏时间内"变长 → 玩家多挨伤害。
        提速到 0.84 后，这里按 0.28/0.84 抵消，保持和提速前一样的手感与难度。 */
-    bossHpMul: 0.47,
+    bossHpMul: 0.20,
     expectedDps: [180, 260, 340, 420, 520, 700, 820, 940, 1050, 1200],
     /* 每章 Boss 目标战斗时长（游戏内秒）。玩家生命是原版加法曲线且没有翅膀/钩爪，
        所以后期 Boss 不能拖太久，否则必被耗死。 */
@@ -2117,7 +2125,7 @@ window.TR_DATA = {"items": [{"id": "melee_wooden_sword", "name": "木剑", "name
     knockbackStunBase: 0.10,   /* 基础眩晕秒数 */
     knockbackStunScale: 0.30,  /* knockPct=1 时额外眩晕 */
     bossKnockResist: 0.18,     /* Boss/Boss部件击退抗性（击退初速与眩晕都乘这个） */
-    trashHpMul: 1.98,         /* 小怪血量整体倍率 */
+    trashHpMul: 0.83,         /* 小怪血量整体倍率（配合 playerDmgMul 下调，保持战斗时长） */
     trashDmgMul: 1.0,       /* 小怪伤害额外系数：小怪战也要能掉血 */
     /* 遭遇战目标 25-40 秒：小怪血量再乘一个节奏系数（独立于 trashHpMul，
        这样调"遭遇战长短"不用动"小怪相对强弱"） */
@@ -2309,7 +2317,7 @@ window.TR_DATA = {"items": [{"id": "melee_wooden_sword", "name": "木剑", "name
     var cls = TR.CLASSES[run.classId] || TR.CLASSES.warrior;
     var st = agg.stats;
     var p = new Unit({
-      side: 'player', name: cls.name, x: 80, y: GROUND,
+      side: 'player', name: cls.name, x: 300, y: GROUND,
       baseW: 20, baseH: 34, scale: 1.0,
       maxHp: st.maxHp, dmg: 1, def: st.def, speed: 66 * (1 + st.moveSpeedPct),      color: cls.color, emoji: cls.icon, ai: 'player'
     });
@@ -3017,8 +3025,24 @@ window.TR_DATA = {"items": [{"id": "melee_wooden_sword", "name": "木剑", "name
          260px 处的怪仍完整可见，弹幕也有明显的飞行距离。 */
       stopGap = maxR > 0 ? TR.util.clamp(maxR * 0.7, 100, 260) : 200;
     }
-    /* 敌人还在前方、并且已经贴到交战距离 → 停下开打 */
-    if (minGapDx > 0 && minGap < stopGap) move = 0;
+    /* 站位：**按当前武器射程保持距离**
+         - 近战：靠近到近战距离就停（不能后退，否则永远够不着）
+         - 远程/召唤：维持一个"射程带"——
+             太近（< 0.85×stopGap）就后撤，太远（> 1.20×stopGap）就前压，
+             带内站着输出。用死区避免左右抖动。
+         后撤有下限：贴到左墙就站住硬打，不会被一路逼到墙角。 */
+    if (p.cls.scope === 'melee') {
+      if (minGapDx > 0 && minGap < stopGap) move = 0;
+    } else {
+      var nearEdge = stopGap * 0.85;
+      var farEdge = stopGap * 1.20;
+      if (minGap < nearEdge) move = -1;        /* 太近：拉开距离 */
+      else if (minGap > farEdge) move = 1;     /* 太远：压上去 */
+      else move = 0;                           /* 射程带内：站定输出 */
+      /* 退到左墙附近就别再退了，站着打（阈值放宽到离墙 80px，
+         给"按射程后撤"留出足够活动空间；出生点已在 300，空间充足） */
+      if (move < 0 && p.x < WALL + 80) move = 0;
+    }
 
     /* 有怪绕到身后贴脸才回头清一下（敌人只从右侧刷新，极少触发） */
     if (dx < 0 && adx < 60) move = -1;
@@ -5624,7 +5648,7 @@ window.TR_DATA = {"items": [{"id": "melee_wooden_sword", "name": "木剑", "name
         if (!TR.canReforge(e.inst)) return;
         shown++;
         var d = TR.instDef(e.inst);
-        var cost = TR.reforgeCost(e.inst);
+        var cost = TR.reforgeCost(e.inst, run);
         var row = el('div', 'buff-row');
         var ico = el('div', 'b-ico');
         ico.appendChild(iconFor({ kind: 'item', inst: e.inst, def: d.item }));
