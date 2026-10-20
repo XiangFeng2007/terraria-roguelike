@@ -313,10 +313,52 @@ body { display: flex; justify-content: center; }
   animation: tin .18s ease-out;
 }
 @keyframes tin { from { opacity: 0; transform: translateY(8px); } }
+/* ============ 右上角公告入口 ============ */
+.news-btn {
+  position: fixed; top: 10px; z-index: 60;
+  /* 贴住中间黑色栏（#app，max-width 560px）的右上角，而不是浏览器窗口右边缘。
+     窗口够宽时按居中留白计算；窄屏则退回 10px。 */
+  right: 10px;
+  right: max(10px, calc((100vw - 560px) / 2 + 10px));
+  max-width: calc(100vw - 16px);
+  display: flex; align-items: center; gap: 5px;
+  padding: 6px 11px; border-radius: 16px;
+  background: rgba(28, 33, 54, .94);
+  border: 1px solid var(--line);
+  color: var(--txt); font-size: 12px; line-height: 1;
+  cursor: pointer; backdrop-filter: blur(6px);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, .45);
+  transition: transform .12s ease;
+}
+.news-btn:active { transform: scale(.95); }
+.news-btn .news-ico { font-size: 13px; }
+.news-btn .news-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: #ff5a5a; box-shadow: 0 0 7px #ff5a5a; margin-left: 2px;
+}
+.news-btn.hidden { display: none; }
+
+/* ============ 更新公告内容 ============ */
+.news-list { max-height: 56vh; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+.news-item { margin: 0 0 16px; }
+.news-item:last-child { margin-bottom: 4px; }
+.news-item h5 {
+  margin: 0 0 6px; font-size: 13.5px; color: var(--gold); font-weight: 700;
+}
+.news-item .news-date { font-size: 11px; color: var(--dim); font-weight: 400; margin-left: 8px; }
+.news-item ul { margin: 0; padding-left: 18px; }
+.news-item li { font-size: 12.5px; line-height: 1.75; color: var(--dim); }
+.news-item li::marker { color: var(--line); }
+
 </style>
 </head>
 <body>
 <div id="app">
+
+  <!-- 右上角公告入口（标题界面显示，有未读更新时带红点） -->
+  <button id="btn-news" class="news-btn" title="更新公告">
+    <span class="news-ico">📢</span><span class="news-txt">公告</span><span class="news-dot hidden"></span>
+  </button>
 
   <!-- ============ 顶栏 ============ -->
   <header id="topbar" class="hidden">
@@ -542,6 +584,23 @@ window.TR_DATA = {"items": [{"id": "melee_wooden_sword", "name": "木剑", "name
 (function (root) {
   'use strict';
   var TR = root.TR = root.TR || {};
+
+  /* ---------------------------------------------------------------- 更新日志
+     顶部/右上角的「公告」会读这里。加新版本时：把新的一条 unshift 到 logs 最前面，
+     并把 version 改掉（有变化时老玩家会看到红点）。 */
+  TR.CHANGELOG = {
+    version: 'v1.3',
+    logs: [
+      {
+        version: 'v1.3', date: '2026-10-20', title: '公告与配色修复',
+        items: [
+          '修复哥布林工匠一打开商店就卡死（重铸费用计算报错）',
+          '降低玩家伤害并同步下调 Boss / 小怪血量，让「防御」的减伤效果更明显',
+          '远程职业改为按当前武器射程保持距离：太近主动后撤、太远前压、射程带内站定输出'
+        ]
+      }
+    ]
+  };
 
   /* ---------------------------------------------------------------- 工具 */
   function clamp(v, a, b) { return v < a ? a : (v > b ? b : v); }
@@ -1210,19 +1269,19 @@ window.TR_DATA = {"items": [{"id": "melee_wooden_sword", "name": "木剑", "name
     });
 
     var glob = scopes.global;
-    /* 生命上限：按原版"生命水晶"的加法曲线 —— 基础 100，每章 +20（相当于每章找到一颗水晶），
-       三选一里拿到生命水晶再 +20，再加上装备/增益的固定加成。
+    /* 生命上限：按原版"生命水晶"的加法曲线 —— 基础 100，每推进一章 +40（= 2 颗水晶），
+       三选一里拿到生命水晶每颗再 +20，再加上装备/增益的固定加成。
        不再用乘算，这样面板上的数字和原版一致（100 → 120 → 140 …）。 */
     var chap = run.chapter || 0;
     var crystals = run.lifeCrystals || 0;
-    var baseHp = 100 + TR.CHAPTER_HP_GAIN * chap + TR.CHAPTER_HP_GAIN * crystals + (glob.hp || 0);
+    var baseHp = 100 + TR.CHAPTER_HP_GAIN * chap + TR.CRYSTAL_HP_GAIN * crystals + (glob.hp || 0);
     /* 保持原版加法曲线：100 / 120 / 140 …（不再乘 pacePlayerHpMul，
        否则面板会出现 312 这种"看起来异常"的数字）。节奏改由敌人血量/伤害来适配。 */
     var chapDmg = 1 + 0.30 * chap;   /* 每章 +22% 伤害（原来 10%，后期打不动 Boss） */
     var stats = {
       maxHp: Math.round(baseHp),
       hpFromChapter: TR.CHAPTER_HP_GAIN * chap,
-      hpFromCrystals: TR.CHAPTER_HP_GAIN * crystals,
+      hpFromCrystals: TR.CRYSTAL_HP_GAIN * crystals,
       maxMana: 20 + (glob.mana || 0),
       def: pieceDef + (glob.def || 0),
       critChance: 0.04 + (glob.critPct || 0),
@@ -1272,7 +1331,8 @@ window.TR_DATA = {"items": [{"id": "melee_wooden_sword", "name": "木剑", "name
 
   /* ---------------------------------------------------------------- 局内状态 */
   TR.RUN_VERSION = 6;          /* v6：加入药水疾病 / 魔力疾病与可数魔力药水 */
-  TR.CHAPTER_HP_GAIN = 35;     /* 每章 / 每颗生命水晶的生命上限增量（原版生命水晶 +20） */
+  TR.CRYSTAL_HP_GAIN = 20;     /* 每颗生命水晶的生命上限增量（和原版一致：+20） */
+  TR.CHAPTER_HP_GAIN = 40;     /* 每推进一章的生命上限增量 = 2 颗生命水晶（+40） */
 
   TR.newRun = function (diffId, classId) {
     var diff = TR.DIFF[diffId] || TR.DIFF.normal;
@@ -1845,7 +1905,7 @@ window.TR_DATA = {"items": [{"id": "melee_wooden_sword", "name": "木剑", "name
       };
     }
     if (kind === 'crystal') {
-      var gain = TR.CHAPTER_HP_GAIN;
+      var gain = TR.CRYSTAL_HP_GAIN;
       return {
         type: 'crystal', kind: 'crystal', amount: gain, name: '生命水晶',
         desc: '最大生命 +' + gain + '（和原版一样，是直接加上限而不是按比例）', icon: '💎'
@@ -2041,10 +2101,10 @@ window.TR_DATA = {"items": [{"id": "melee_wooden_sword", "name": "木剑", "name
   /* 平衡系数：肉鸽局里玩家装备远少于原版同阶段，需要压缩 Boss 血量、放大玩家输出 */
   var TUNE = TR.TUNE = {
     /* 全局节奏：1.0 = 原始速度。
-       0.28 太慢（约 3.5 倍慢放），按用户要求整体提速到 0.84（= 原来的 3 倍）。
-       Boss 血量公式里也乘了 timeScale，所以 Boss 战的真实时长基本不变，
-       变快的是"动作看起来的速度"和杂兵战的节奏。 */
-    timeScale: 0.84,
+       0.84 稍快，按反馈回调到 0.68（约为原来的 81%）。
+       Boss 血量公式里也乘了 timeScale，所以下面 bossHpMul 按 0.84/0.68 反向补偿，
+       保证 Boss 战的游戏内时长与之前一致，只有"看起来的速度"变慢。 */
+    timeScale: 0.68,
     /* 玩家伤害倍率。
        原来 3.8 时单次伤害过大，"减去敌人防御×0.5"这点扣减完全看不出来
        （打 200 减 8 等于没减）。降到 1.6 后单次伤害约为原来 42%，
@@ -2090,7 +2150,7 @@ window.TR_DATA = {"items": [{"id": "melee_wooden_sword", "name": "木剑", "name
     /* 注意：target = expectedDps × timeScale × 目标秒数，
        所以 timeScale 变快时血量会跟着涨、战斗在"游戏时间内"变长 → 玩家多挨伤害。
        提速到 0.84 后，这里按 0.28/0.84 抵消，保持和提速前一样的手感与难度。 */
-    bossHpMul: 0.20,
+    bossHpMul: 0.247,
     expectedDps: [180, 260, 340, 420, 520, 700, 820, 940, 1050, 1200],
     /* 每章 Boss 目标战斗时长（游戏内秒）。玩家生命是原版加法曲线且没有翅膀/钩爪，
        所以后期 Boss 不能拖太久，否则必被耗死。 */
@@ -4864,6 +4924,7 @@ window.TR_DATA = {"items": [{"id": "melee_wooden_sword", "name": "木剑", "name
     $('topbar').classList.toggle('hidden', name === 'title');
     var w = $('screen-' + name);
     if (w) w.scrollTop = 0;
+    UI.updateNewsBadge();
   };
 
   UI.updateTopbar = function () {
@@ -5337,7 +5398,7 @@ window.TR_DATA = {"items": [{"id": "melee_wooden_sword", "name": "木剑", "name
     } else if (offer.type === 'crystal') {
       run.lifeCrystals = (run.lifeCrystals || 0) + 1;
       var mx2 = TR.recalcHp(run).stats.maxHp;
-      UI.toast('💎 生命水晶：最大生命 +' + (offer.amount || TR.CHAPTER_HP_GAIN) + '（现在 ' + mx2 + '）');
+      UI.toast('💎 生命水晶：最大生命 +' + (offer.amount || TR.CRYSTAL_HP_GAIN) + '（现在 ' + mx2 + '）');
       sfx('potion');
     } else if (offer.inst) {
       UI.acquire(offer.inst, function () { done(); });
@@ -5506,8 +5567,8 @@ window.TR_DATA = {"items": [{"id": "melee_wooden_sword", "name": "木剑", "name
     var title = ch ? ch.name : ('第' + (run.chapter + 1) + '章');
     var body = el('div');
     body.appendChild(el('p', null, '你进入了 <b>第' + (run.chapter + 1) + '章 · ' + title + '</b>。'));
-    body.appendChild(el('p', null, '💎 你在新区域找到了一颗<b>生命水晶：最大生命 +' + TR.CHAPTER_HP_GAIN +
-      '</b>（和原版一样是直接加上限，现在 ' + TR.aggregate(run).stats.maxHp + '）'));
+    body.appendChild(el('p', null, '💎 进入新区域，生命上限提升 <b>+' + TR.CHAPTER_HP_GAIN +
+      '</b>（相当于 2 颗生命水晶，现在 ' + TR.aggregate(run).stats.maxHp + '）'));
     var bossIds = (TR.db.bossesByChapter[ch.tier] || []).map(function (b) { return b.name; });
     if (bossIds.length) body.appendChild(el('p', null, '本章 Boss：' + bossIds.join(' / ')));
     body.appendChild(el('p', null, '生命 ' + Math.round(run.hp) + '/' + TR.aggregate(run).stats.maxHp + '　你的钱 ' + TR.money(run.copper)));
@@ -6003,6 +6064,59 @@ window.TR_DATA = {"items": [{"id": "melee_wooden_sword", "name": "木剑", "name
   UI.showModal = showModal;
   UI.closeModal = closeModal;
 
+  /* ------------------------------------------------------------ 更新公告 */
+  var NEWS_KEY = 'trrg_news_ver';
+
+  function newsSeen() {
+    try { return root.localStorage ? root.localStorage.getItem(NEWS_KEY) : null; }
+    catch (e) { return null; }
+  }
+  function newsMarkRead() {
+    try {
+      if (root.localStorage && TR.CHANGELOG) root.localStorage.setItem(NEWS_KEY, TR.CHANGELOG.version);
+    } catch (e) { /* ignore */ }
+    UI.updateNewsBadge();
+  }
+
+  /* 标题界面才显示入口；有未读更新时按钮上出现红点 */
+  UI.updateNewsBadge = function () {
+    var btn = $('btn-news');
+    if (!btn) return;
+    var show = state.screen === 'title';
+    btn.classList.toggle('hidden', !show);
+    var dot = btn.querySelector('.news-dot');
+    if (dot) {
+      var unread = !!(TR.CHANGELOG && newsSeen() !== TR.CHANGELOG.version);
+      dot.classList.toggle('hidden', !unread);
+    }
+  };
+
+  UI.showChangelog = function () {
+    var cl = TR.CHANGELOG;
+    if (!cl || !cl.logs || !cl.logs.length) {
+      showModal({ title: '更新公告', body: '<p>暂无更新记录。</p>', actions: [{ label: '知道了', primary: true, onClick: closeModal }] });
+      return;
+    }
+    var body = el('div', 'news-list');
+    cl.logs.forEach(function (log) {
+      var item = el('div', 'news-item');
+      var h = el('h5', null, log.title || log.version);
+      var date = el('span', 'news-date', (log.version || '') + '　' + (log.date || ''));
+      h.appendChild(date);
+      item.appendChild(h);
+      var ul = el('ul');
+      (log.items || []).forEach(function (t) { ul.appendChild(el('li', null, t)); });
+      item.appendChild(ul);
+      body.appendChild(item);
+    });
+    showModal({
+      title: '📢 更新公告',
+      body: body,
+      actions: [{ label: '知道了', primary: true, onClick: function () { newsMarkRead(); closeModal(); } }]
+    });
+    newsMarkRead();
+  };
+
   UI.showHelp = function () {
     showModal({
       title: '怎么玩',
@@ -6031,6 +6145,7 @@ window.TR_DATA = {"items": [{"id": "melee_wooden_sword", "name": "木剑", "name
       actions: [
         { label: '继续游戏', primary: true, onClick: closeModal },
         { label: '怎么玩', onClick: function () { closeModal(); UI.showHelp(); } },
+        { label: '更新公告', onClick: function () { closeModal(); UI.showChangelog(); } },
         {
           label: '放弃本局（结算星魂）', ghost: true, onClick: function () {
             closeModal();
@@ -6137,6 +6252,8 @@ window.TR_DATA = {"items": [{"id": "melee_wooden_sword", "name": "木剑", "name
     };
     $('btn-loadout').onclick = function () { UI.showLoadout(state.screen); };
     $('btn-menu').onclick = UI.showMenu;
+    var newsBtn = $('btn-news');
+    if (newsBtn) newsBtn.onclick = function () { sfx('ui'); UI.showChangelog(); };
     /* 恢复上次选择的倍速并同步按钮高亮：
        否则一刷新页面或开新战斗就掉回 1×。
        注意 SPEED_VER：底速从 0.28 提到 0.84（整体快 3 倍）后，升一次版本，
