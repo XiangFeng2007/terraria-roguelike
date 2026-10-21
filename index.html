@@ -231,9 +231,22 @@ body { display: flex; justify-content: center; }
   border-radius: 4px; overflow: hidden;
 }
 .bar i { display: block; height: 100%; background: linear-gradient(180deg, #ff6a80, #b8203a); transition: width .08s linear; }
-.bar span { position: absolute; inset: 0; text-align: center; font-size: 10.5px; line-height: 16px; color: #fff; text-shadow: 0 1px 2px #000; }
+.bar span {
+  position: absolute; inset: 0;
+  /* 用 flex 居中，而不是写死 line-height：
+     蓝条高度较小，line-height:16px 的文字会被 overflow:hidden 裁掉，
+     看起来就像被挡住了一样。 */
+  display: flex; align-items: center; justify-content: center;
+  text-align: center; font-size: 10.5px; line-height: 1;
+  color: #fff; text-shadow: 0 1px 2px #000;
+  pointer-events: none;
+}
 .bar.player i { background: linear-gradient(180deg, #ff7a8c, #c02640); }
-.bar.mana { height: 8px; }
+.bar.mana {
+  height: 13px;
+  margin-top: 3px;              /* 和血条分开，避免两条贴在一起看不清 */
+}
+.bar.mana span { font-size: 9.5px; }
 .bar.mana i { background: linear-gradient(180deg, #6a9cff, #24449c); }
 .bar.shield i { background: linear-gradient(180deg, #9ad8ff, #4080b0); }
 .bar.ebar { height: 11px; margin-bottom: 3px; background: #26161c; border-color: #4a2a2a; }
